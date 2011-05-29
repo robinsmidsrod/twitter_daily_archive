@@ -57,7 +57,7 @@ sub get_subscriber_id {
     $sth->execute($access_token);
     ($subscriber_id) = $sth->fetchrow_array();
     die("No subscriber found for access_token $access_token\n") unless $subscriber_id;
-    return $subscriber_id;    
+    return $subscriber_id;
 }
 
 # Fetches tweets for the specified subscriber and date (oldest first)

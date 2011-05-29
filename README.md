@@ -33,7 +33,7 @@ content:
     password = <database-password>
 
 The entire `[database]` chunk is optional if you name your database
-twitter_daily_archive and the local user has unauthenticated access to the
+`twitter_daily_archive` and the local user has unauthenticated access to the
 PostgreSQL instance running on localhost.
 
 Database setup
