@@ -11,12 +11,13 @@ use DateTime::Format::Strptime;
 use JSON::XS ();
 use Encode ();
 use Data::Dumper qw(Dumper);
+use HTML::Entities ();
 
 STDOUT->binmode(':utf8');
 STDERR->binmode(':utf8');
 
 # Various globals..
-my $nat_dt_parser = DateTime::Format::Natural->new();
+my $nat_dt_parser = DateTime::Format::Natural->new( time_zone => 'UTC' );
 my $pg_dt_parser = DateTime::Format::Pg->new();
 my $rest_dt_parser = DateTime::Format::Strptime->new(pattern => '%a %b %d %T %z %Y');
 my $jp = JSON::XS->new->utf8;
@@ -89,9 +90,18 @@ sub get_tweets {
 
 sub display_tweet {
     my ($tweet) = @_;
-#    print Dumper(keys %{$tweet});
-    print $rest_dt_parser->parse_datetime($tweet->{'created_at'})
-        . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'}) . ">"
-        . " " . Encode::decode_utf8($tweet->{'text'})
-        . "\n";
+    if ( $tweet->{'retweeted_status'} ) {
+        print $rest_dt_parser->parse_datetime($tweet->{'created_at'})
+            . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'} . "/" . $tweet->{'retweeted_status'}{'user'}{'screen_name'}) . ">"
+            . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'retweeted_status'}{'text'}))
+            . "\n";
+    }
+    else {
+        print $rest_dt_parser->parse_datetime($tweet->{'created_at'})
+            . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'}) . ">"
+            . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'text'}))
+            . "\n";
+    }
+#    print Dumper($tweet);
+#    print "\t" . join(",", keys %{$tweet}) . "\n";
 }
