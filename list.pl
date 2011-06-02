@@ -5,21 +5,24 @@ use warnings;
 use rlib 'lib';
 
 use DailyArchive;
+use DateTime::TimeZone;
 use DateTime::Format::Natural;
 use DateTime::Format::Pg;
 use DateTime::Format::Strptime;
 use JSON::XS ();
 use Encode ();
-use Data::Dumper qw(Dumper);
+#use Data::Printer;
 use HTML::Entities ();
 
 STDOUT->binmode(':utf8');
 STDERR->binmode(':utf8');
 
 # Various globals..
-my $nat_dt_parser = DateTime::Format::Natural->new( time_zone => 'UTC' );
+my $local_tz = DateTime::TimeZone->new(name => 'local');
+my $nat_dt_parser = DateTime::Format::Natural->new( time_zone => 'local' );
 my $pg_dt_parser = DateTime::Format::Pg->new();
 my $rest_dt_parser = DateTime::Format::Strptime->new(pattern => '%a %b %d %T %z %Y');
+my $human_dt_parser = DateTime::Format::Strptime->new(pattern => '%Y-%m-%d %H:%M');
 my $jp = JSON::XS->new->utf8;
 my $da = DailyArchive->new();
 
@@ -41,12 +44,13 @@ else {
 
 exit;
 
-# Parse a natural date string
+# Parse a natural date string, return DateTime object in local time zone
 sub get_date {
     my ($date) = @_;
-    return DateTime->now() unless $date;
+    return DateTime->now( time_zone => $local_tz ) unless $date;
     my $dt = $nat_dt_parser->parse_datetime($date);
     die("Invalid date: " . $nat_dt_parser->error . "\n") unless $nat_dt_parser->success;
+    $dt->set_time_zone($local_tz);
     return $dt;
 }
 
@@ -64,10 +68,13 @@ sub get_subscriber_id {
 # Fetches tweets for the specified subscriber and date (oldest first)
 sub get_tweets {
     my ($subscriber_id, $dt) = @_;
-    my $dt_start = $dt->clone; $dt_start->truncate( to => 'day' );
-    my $dt_end = $dt_start->clone; $dt_end->add( days => 1 );
-    warn("Duration start: $dt_start\n") if $da->debug;
-    warn("Duration end:   $dt_end\n") if $da->debug;
+    my $dt_start = $dt->clone;
+    $dt_start->truncate( to => 'day' );
+    my $dt_end = $dt_start->clone;
+    $dt_end->add( days => 1 );
+    $dt_end->subtract( seconds => 1 );
+    warn("Duration start: " . $pg_dt_parser->format_datetime($dt_start) . "\n") if $da->debug;
+    warn("Duration end:   " . $pg_dt_parser->format_datetime($dt_end)   . "\n") if $da->debug;
     my $old_enable_utf8 = $da->dbh->{'pg_enable_utf8'};
     $da->dbh->{'pg_enable_utf8'}= 0;
     my $sth = $da->dbh->prepare('SELECT t.tweet FROM timeline tl JOIN tweet t ON tl.tweet_id=t.tweet_id WHERE tl.subscriber_id = ? AND tl.created_at BETWEEN ? AND ? ORDER BY tl.created_at');
@@ -90,18 +97,23 @@ sub get_tweets {
 
 sub display_tweet {
     my ($tweet) = @_;
+#    print "Tweet: ", p($tweet), "\n";
+#    print "\t" . join(",", keys %{$tweet}) . "\n";
+    my $created_at = $rest_dt_parser->parse_datetime(
+        $tweet->{'created_at'}
+    );
+    $created_at->set_time_zone($local_tz);
+    $created_at->set_formatter($human_dt_parser);
     if ( $tweet->{'retweeted_status'} ) {
-        print $rest_dt_parser->parse_datetime($tweet->{'created_at'})
+        print $created_at
             . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'} . "/" . $tweet->{'retweeted_status'}{'user'}{'screen_name'}) . ">"
             . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'retweeted_status'}{'text'}))
             . "\n";
     }
     else {
-        print $rest_dt_parser->parse_datetime($tweet->{'created_at'})
+        print $created_at
             . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'}) . ">"
             . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'text'}))
             . "\n";
     }
-#    print Dumper($tweet);
-#    print "\t" . join(",", keys %{$tweet}) . "\n";
 }
