@@ -61,9 +61,10 @@ sub add_subscriber {
     my ($subscriber) = @_;
     my $rc = 0;
     eval {
-        my $sth = $da->dbh->prepare('INSERT INTO subscriber (subscriber_id, subscriber, access_token, access_token_secret) VALUES (?,?,?,?)');
+        my $sth = $da->dbh->prepare('INSERT INTO subscriber (subscriber_id, username, subscriber, access_token, access_token_secret) VALUES (?,?,?,?,?)');
         $rc = $sth->execute(
             $subscriber->{'id'},
+            decode_utf8( $subscriber->{'screen_name'} ),
             $jp->encode($subscriber),
             $da->twitter_access_token,
             $da->twitter_access_token_secret,

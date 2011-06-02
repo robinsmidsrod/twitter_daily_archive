@@ -21,6 +21,7 @@ SET default_with_oids = false;
 
 CREATE TABLE subscriber (
     subscriber_id bigint NOT NULL,
+    username text NOT NULL,
     subscriber text NOT NULL,
     access_token text NOT NULL,
     access_token_secret text NOT NULL
@@ -32,6 +33,13 @@ CREATE TABLE subscriber (
 --
 
 COMMENT ON COLUMN subscriber.subscriber_id IS 'The id field of the raw verify_credentials data';
+
+
+--
+-- Name: COLUMN subscriber.username; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN subscriber.username IS 'The Twitter username from the raw JSON data';
 
 
 --
@@ -128,6 +136,14 @@ COMMENT ON COLUMN "user"."user" IS 'The raw JSON data for a user';
 
 ALTER TABLE ONLY subscriber
     ADD CONSTRAINT subscriber_pkey PRIMARY KEY (subscriber_id);
+
+
+--
+-- Name: subscriber_username_key; Type: CONSTRAINT; Schema: public; Owner: -; Tablespace: 
+--
+
+ALTER TABLE ONLY subscriber
+    ADD CONSTRAINT subscriber_username_key UNIQUE (username);
 
 
 --
