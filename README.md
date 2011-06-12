@@ -53,8 +53,10 @@ add the following to your crontab:
 
     # Archive tweets every hour
     0 * * * * ~/twitter_daily_archive/archive.pl
-    # Email tweets 30 minutes past midnight every day
+    # Email tweets 30 minutes past midnight every day (plain text)
     30 0 * * * ~/twitter_daily_archive/list.pl yesterday | mail -s 'Your Daily Tweets' your.email@here
+    # Email tweets 30 minutes past midnight every day (in HTML)
+    30 0 * * * ~/twitter_daily_archive/list.pl --html yesterday | mail -a 'Content-Type: text/html; charset=utf8' -s 'Your Daily Tweets' your.email@here
 
 Copyright
 ---------

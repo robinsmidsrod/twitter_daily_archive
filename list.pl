@@ -13,6 +13,7 @@ use JSON::XS ();
 use Encode ();
 #use Data::Printer;
 use HTML::Entities ();
+use Getopt::Long;
 
 STDOUT->binmode(':utf8');
 STDERR->binmode(':utf8');
@@ -26,23 +27,100 @@ my $human_dt_parser = DateTime::Format::Strptime->new(pattern => '%Y-%m-%d %H:%M
 my $jp = JSON::XS->new->utf8;
 my $da = DailyArchive->new();
 
+# Process command line options
+my $html;
+my $opts = GetOptions(
+    'html' => \$html,	# flag, use html output
+);
+my $input_date = shift @ARGV;
+
 # Fetch date (today or natural date as command line arg)
-my $dt = get_date(shift @ARGV);
+my $dt = get_date($input_date);
+
+print page_header(
+    "Your daily tweets for " . $rest_dt_parser->format_datetime($dt)
+);
 
 # Fetch and display tweets for specified day
 my $tweets = get_tweets(get_subscriber_id(), $dt);
 if ( scalar @$tweets > 0 ) {
-    print scalar @$tweets . " tweet(s) found for " . $rest_dt_parser->format_datetime($dt) . "\n";
-    print "-" x 79, "\n";
-    foreach my $tweet ( @$tweets ) {
-        display_tweet($tweet);
-    }
+    print headline(
+        scalar @$tweets . " tweet(s) found for " . $rest_dt_parser->format_datetime($dt)
+    );
+    print divider();
+    print format_tweets($tweets);
 }
 else {
-    print "No tweets found for " . $rest_dt_parser->format_datetime($dt) . "\n";
+    print headline(
+        "No tweets found for " . $rest_dt_parser->format_datetime($dt)
+    );
 }
 
+print page_footer();
+
 exit;
+
+# Format and return all the tweets according to formatting (plain text or HTML)
+sub format_tweets {
+    my ($tweets) = @_;
+    my $output = "";
+    $output .= qq!<ul class="tweets">\n! if $html;
+    foreach my $tweet ( @$tweets ) {
+        $output .= format_tweet($tweet);
+    }
+    $output .= "</ul>\n" if $html;
+    return $output;
+}
+
+# The complete page header (mostly useful in HTML)
+sub page_header {
+    my ($title) = @_;
+    if ( $html ) {
+        my $encoded_title = HTML::Entities::encode($title);
+        return <<"EOM";
+<!DOCTYPE html>
+<html>
+<head>
+<title>$encoded_title</title>
+<style>
+body { font-family: sans-serif; }
+li.tweet { float: left; min-width: 15em; max-width: 25em; height: 10ex; border: 0.125em solid #ccc; overflow: hidden; border-radius: 0.5em; padding: 0.25em; background-color: #eee;margin: 0.125em; }
+li.tweet:hover { overflow: auto; background-color: rgba(218, 236, 244, 0.9); }
+.tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; text-decoration: none; }
+.tweet .author { font-weight: bold; margin-right: 0.5em; }
+.tweet .author a { text-decoration: none; }
+.tweet .message { }
+</style>
+</head>
+<body>
+EOM
+    }
+    return "";
+}
+
+# The complete page footer (mostly useful in HTML)
+sub page_footer {
+    if ( $html )  {
+        return "</body>\n"
+             . "</html>\n";
+    }
+    return divider();
+}
+
+# Wrap any strings in a headline-like code chunk
+sub headline {
+    my $str = join("\n", map { defined $_ ? $_ : "" } @_ );
+    if ($html) {
+        return "<h1>" . HTML::Entities::encode($str) . "</h1>\n";
+    }
+    return $str . "\n";
+}
+
+# Prints a line dividing output
+sub divider {
+    return "<hr>\n" if $html;
+    return ( "-" x 79 ) . "\n";
+}
 
 # Parse a natural date string, return DateTime object in local time zone
 sub get_date {
@@ -95,7 +173,7 @@ sub get_tweets {
     return wantarray ? @tweets : \@tweets;
 }
 
-sub display_tweet {
+sub format_tweet {
     my ($tweet) = @_;
 #    print "Tweet: ", p($tweet), "\n";
 #    print "\t" . join(",", keys %{$tweet}) . "\n";
@@ -104,16 +182,91 @@ sub display_tweet {
     );
     $created_at->set_time_zone($local_tz);
     $created_at->set_formatter($human_dt_parser);
-    if ( $tweet->{'retweeted_status'} ) {
-        print $created_at
-            . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'} . "/" . $tweet->{'retweeted_status'}{'user'}{'screen_name'}) . ">"
-            . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'retweeted_status'}{'text'}))
-            . "\n";
+
+    my $output = "";
+    $output .= qq!<li class="tweet">! if $html;
+
+    my $formatted_tweet = "";
+    $formatted_tweet .= "<div>" if $html;
+
+    my $author = $tweet->{'user'}{'screen_name'};
+    my $author_safe = HTML::Entities::encode($author);
+
+    my $tweet_id = $tweet->{'id'};
+    my $tweet_id_safe = HTML::Entities::encode($tweet_id);
+
+    my $is_rt = $tweet->{'retweeted_status'} ? 1 : 0;
+
+    # Format date
+    if ( $html ) {
+        if ( $author_safe and $tweet_id_safe ) {
+            $formatted_tweet .= qq!<a class="date" href="http://twitter.com/$author_safe/status/$tweet_id_safe" target="_blank" title="Permalink">$created_at</a>!;
+        }
+        else {
+            $formatted_tweet .= qq!<span class="date">$created_at</span>!;
+        }
     }
     else {
-        print $created_at
-            . " <" . Encode::decode_utf8($tweet->{'user'}{'screen_name'}) . ">"
-            . " " . HTML::Entities::decode(Encode::decode_utf8($tweet->{'text'}))
-            . "\n";
+        $formatted_tweet .= $created_at;
     }
+
+    # Format username
+    if ( $html ) {
+        if ( $is_rt ) {
+            my $orig_tweet_author = $tweet->{'retweeted_status'}{'user'}{'screen_name'};
+            my $orig_tweet_author_safe = HTML::Entities::encode($orig_tweet_author);
+            $formatted_tweet .= qq!<span class="author">!
+                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for user">$author_safe</a>!
+                             .  " / "
+                             . qq!<a href="http://twitter.com/$orig_tweet_author_safe/" target="_blank" title="Twitter homepage for user">$orig_tweet_author_safe</a>!
+                             .  qq!</span>!;
+        }
+        else {
+            $formatted_tweet .= qq!<span class="author">!
+                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for user">$author_safe</a>!
+                             .  qq!</span>!;
+        }
+    }
+    else {
+        if ( $is_rt ) {
+            $formatted_tweet .= " <"
+                             .  Encode::decode_utf8(
+                                    $author . "/" . $tweet->{'retweeted_status'}{'user'}{'screen_name'}
+                                )
+                             .  ">";
+        }
+        else {
+            $formatted_tweet .= " <"
+                             .  Encode::decode_utf8($author)
+                             . ">";
+        }
+    }
+
+    $formatted_tweet .= "</div>\n" if $html;
+
+    # Format message
+    if ( $html ) {
+        $formatted_tweet .= qq!<span class="message">!
+                         .  HTML::Entities::encode(
+                                HTML::Entities::decode(
+                                    Encode::decode_utf8(
+                                        $is_rt ? $tweet->{'retweeted_status'}{'text'} : $tweet->{'text'}
+                                    )
+                                )
+                            )
+                         .  qq!</span>!;
+    }
+    else {
+        $formatted_tweet .= " "
+                         .  HTML::Entities::decode(
+                                Encode::decode_utf8(
+                                    $is_rt ? $tweet->{'retweeted_status'}{'text'} : $tweet->{'text'}
+                                )
+                            );
+    }
+
+    $output .= $formatted_tweet;
+    $output .= qq!</li>! if $html;
+    $output .= "\n";
+    return $output;
 }
