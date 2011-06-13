@@ -5,7 +5,9 @@ use warnings;
 package DailyArchive::Tweet;
 use Moose;
 
+use DailyArchive::TwitterUser;
 use HTML::Entities ();
+use JSON::XS ();
 use feature 'switch';
 
 # The raw JSON text in binary UTF8
@@ -39,6 +41,21 @@ sub _build__text_raw {
     return $self->is_retweet
          ? $self->json->{'retweeted_status'}->{'text'}
          : $self->json->{'text'};
+}
+
+# The user associated with the tweet
+has 'user' => (
+    is => 'ro',
+    isa => 'DailyArchive::TwitterUser',
+    lazy_build => 1,
+);
+
+sub _build_user {
+    my ($self) = @_;
+    my $user = DailyArchive::TwitterUser->new(
+        json => $self->json->{'user'}
+    );
+    return $user;
 }
 
 # The message from the tweet in plain text format (no HTML entities)

@@ -88,8 +88,9 @@ body { font-family: sans-serif; }
 a { text-decoration: none; }
 li.tweet { float: left; min-width: 15em; max-width: 25em; height: 10ex; border: 0.125em solid #ccc; overflow: hidden; border-radius: 0.5em; padding: 0.25em; background-color: #eee;margin: 0.125em; }
 li.tweet:hover { overflow: auto; background-color: rgba(218, 236, 244, 0.9); }
-.tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; }
-.tweet .author { font-weight: bold; margin-right: 0.5em; }
+.tweet .user_image { float: left; margin-right: 0.25em; margin-bottom: 0.25em; }
+.tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; font-size: 0.8em; }
+.tweet .author { font-weight: bold; margin-right: 0.5em; font-size: 0.8em; }
 .tweet .message { }
 .tweet .message .hashtag { }
 .tweet .message .user_mention { }
@@ -193,25 +194,32 @@ sub format_tweet {
     my $formatted_tweet = "";
     $formatted_tweet .= "<div>" if $html;
 
-    my $author = $tweet->{'user'}{'screen_name'};
+    my $tweet_obj = DailyArchive::Tweet->new( json => $tweet );
+
+    my $author = $tweet_obj->user->screen_name;
     my $author_safe = HTML::Entities::encode($author);
 
-    my $author_name = $tweet->{'user'}{'name'};
+    my $author_name = $tweet_obj->user->name;
     my $author_name_safe = HTML::Entities::encode($author_name);
 
     my $tweet_id = $tweet->{'id'};
     my $tweet_id_safe = HTML::Entities::encode($tweet_id);
 
-    my $is_rt = $tweet->{'retweeted_status'} ? 1 : 0;
+    # Format user image
+    if ( $html ) {
+        my $image_url = HTML::Entities::encode(
+            $tweet_obj->user->profile_image_url
+        );
+        $formatted_tweet .= qq!<a class="author" href="http://twitter.com/$author_safe/" title="Twitter homepage for $author_name_safe" target="_blank">!
+                         .  qq!<img class="user_image" src="$image_url" width="48" height="48" alt="Image of $author_name_safe">!
+                         .  qq!</a>!;
+    }
 
     # Format date
     if ( $html ) {
-        if ( $author_safe and $tweet_id_safe ) {
-            $formatted_tweet .= qq!<a class="date" href="http://twitter.com/$author_safe/status/$tweet_id_safe" target="_blank" title="Permalink">$created_at</a>!;
-        }
-        else {
-            $formatted_tweet .= qq!<span class="date">$created_at</span>!;
-        }
+        $formatted_tweet .= qq!<a class="date" href="http://twitter.com/$author_safe/status/$tweet_id_safe" target="_blank" title="Tweet permalink">!
+                         .  $created_at
+                         .  q!</a>!;
     }
     else {
         $formatted_tweet .= $created_at;
@@ -219,7 +227,7 @@ sub format_tweet {
 
     # Format username
     if ( $html ) {
-        if ( $is_rt ) {
+        if ( $tweet_obj->is_retweet ) {
             my $orig_tweet_author = $tweet->{'retweeted_status'}{'user'}{'screen_name'};
             my $orig_tweet_author_safe = HTML::Entities::encode($orig_tweet_author);
 
@@ -239,7 +247,7 @@ sub format_tweet {
         }
     }
     else {
-        if ( $is_rt ) {
+        if ( $tweet_obj->is_retweet ) {
             $formatted_tweet .= " <"
                              .  Encode::decode_utf8(
                                     $author . "/" . $tweet->{'retweeted_status'}{'user'}{'screen_name'}
@@ -256,7 +264,6 @@ sub format_tweet {
     $formatted_tweet .= "</div>\n" if $html;
 
     # Format message
-    my $tweet_obj = DailyArchive::Tweet->new( json => $tweet );
     if ( $html ) {
         $formatted_tweet .= qq!<span class="message">! . $tweet_obj->text_html . qq!</span>!;
     }
