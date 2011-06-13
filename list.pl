@@ -5,6 +5,7 @@ use warnings;
 use rlib 'lib';
 
 use DailyArchive;
+use DailyArchive::Tweet;
 use DateTime::TimeZone;
 use DateTime::Format::Natural;
 use DateTime::Format::Pg;
@@ -47,7 +48,7 @@ if ( scalar @$tweets > 0 ) {
     print headline(
         scalar @$tweets . " tweet(s) found for " . $rest_dt_parser->format_datetime($dt)
     );
-    print divider();
+    print divider() unless $html;
     print format_tweets($tweets);
 }
 else {
@@ -84,12 +85,15 @@ sub page_header {
 <title>$encoded_title</title>
 <style>
 body { font-family: sans-serif; }
+a { text-decoration: none; }
 li.tweet { float: left; min-width: 15em; max-width: 25em; height: 10ex; border: 0.125em solid #ccc; overflow: hidden; border-radius: 0.5em; padding: 0.25em; background-color: #eee;margin: 0.125em; }
 li.tweet:hover { overflow: auto; background-color: rgba(218, 236, 244, 0.9); }
-.tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; text-decoration: none; }
+.tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; }
 .tweet .author { font-weight: bold; margin-right: 0.5em; }
-.tweet .author a { text-decoration: none; }
 .tweet .message { }
+.tweet .message .hashtag { }
+.tweet .message .user_mention { }
+.tweet .message .url { }
 </style>
 </head>
 <body>
@@ -192,6 +196,9 @@ sub format_tweet {
     my $author = $tweet->{'user'}{'screen_name'};
     my $author_safe = HTML::Entities::encode($author);
 
+    my $author_name = $tweet->{'user'}{'name'};
+    my $author_name_safe = HTML::Entities::encode($author_name);
+
     my $tweet_id = $tweet->{'id'};
     my $tweet_id_safe = HTML::Entities::encode($tweet_id);
 
@@ -215,15 +222,19 @@ sub format_tweet {
         if ( $is_rt ) {
             my $orig_tweet_author = $tweet->{'retweeted_status'}{'user'}{'screen_name'};
             my $orig_tweet_author_safe = HTML::Entities::encode($orig_tweet_author);
+
+            my $orig_tweet_author_name = $tweet->{'retweeted_status'}{'user'}{'name'};
+            my $orig_tweet_author_name_safe = HTML::Entities::encode($orig_tweet_author_name);
+
             $formatted_tweet .= qq!<span class="author">!
-                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for user">$author_safe</a>!
+                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for $author_name_safe">$author_safe</a>!
                              .  " / "
-                             . qq!<a href="http://twitter.com/$orig_tweet_author_safe/" target="_blank" title="Twitter homepage for user">$orig_tweet_author_safe</a>!
+                             . qq!<a href="http://twitter.com/$orig_tweet_author_safe/" target="_blank" title="Twitter homepage for $orig_tweet_author_name_safe">$orig_tweet_author_safe</a>!
                              .  qq!</span>!;
         }
         else {
             $formatted_tweet .= qq!<span class="author">!
-                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for user">$author_safe</a>!
+                             .  qq!<a href="http://twitter.com/$author_safe/" target="_blank" title="Twitter homepage for $author_name_safe">$author_safe</a>!
                              .  qq!</span>!;
         }
     }
@@ -245,24 +256,12 @@ sub format_tweet {
     $formatted_tweet .= "</div>\n" if $html;
 
     # Format message
+    my $tweet_obj = DailyArchive::Tweet->new( json => $tweet );
     if ( $html ) {
-        $formatted_tweet .= qq!<span class="message">!
-                         .  HTML::Entities::encode(
-                                HTML::Entities::decode(
-                                    Encode::decode_utf8(
-                                        $is_rt ? $tweet->{'retweeted_status'}{'text'} : $tweet->{'text'}
-                                    )
-                                )
-                            )
-                         .  qq!</span>!;
+        $formatted_tweet .= qq!<span class="message">! . $tweet_obj->text_html . qq!</span>!;
     }
     else {
-        $formatted_tweet .= " "
-                         .  HTML::Entities::decode(
-                                Encode::decode_utf8(
-                                    $is_rt ? $tweet->{'retweeted_status'}{'text'} : $tweet->{'text'}
-                                )
-                            );
+        $formatted_tweet .= " " . $tweet_obj->text;
     }
 
     $output .= $formatted_tweet;
