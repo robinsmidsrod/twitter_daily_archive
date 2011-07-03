@@ -24,7 +24,7 @@ my $local_tz = DateTime::TimeZone->new(name => 'local');
 my $nat_dt_parser = DateTime::Format::Natural->new( time_zone => 'local' );
 my $pg_dt_parser = DateTime::Format::Pg->new();
 my $rest_dt_parser = DateTime::Format::Strptime->new(pattern => '%a %b %d %T %z %Y');
-my $human_dt_parser = DateTime::Format::Strptime->new(pattern => '%Y-%m-%d %H:%M');
+my $human_dt_parser = DateTime::Format::Strptime->new(pattern => '%H:%M'); # time only
 my $jp = JSON::XS->new->utf8;
 my $da = DailyArchive->new();
 
@@ -86,9 +86,9 @@ sub page_header {
 <style>
 body { font-family: sans-serif; }
 a { text-decoration: none; }
-li.tweet { float: left; min-width: 15em; max-width: 25em; height: 10ex; border: 0.125em solid #ccc; overflow: hidden; border-radius: 0.5em; padding: 0.25em; background-color: #eee;margin: 0.125em; }
+li.tweet { display: inline-block; width: 21em; height: 12.5ex; border: 0.125em solid #ccc; overflow: hidden; border-radius: 0.5em; padding: 0.25em; background-color: #eee;margin: 0.125em; }
 li.tweet:hover { overflow: auto; background-color: rgba(218, 236, 244, 0.9); }
-.tweet .user_image { float: left; margin-right: 0.25em; margin-bottom: 0.25em; }
+.tweet .user_image { float: left; width: 48px; min-height: 48px; max-height: 96px; margin-right: 0.25em; }
 .tweet .date { font-style: italic; margin-right: 0.5em; white-space: nowrap; font-size: 0.8em; }
 .tweet .author { font-weight: bold; margin-right: 0.5em; font-size: 0.8em; }
 .tweet .message { }
@@ -210,9 +210,24 @@ sub format_tweet {
         my $image_url = HTML::Entities::encode(
             $tweet_obj->user->profile_image_url
         );
-        $formatted_tweet .= qq!<a class="author" href="http://twitter.com/$author_safe/" title="Twitter homepage for $author_name_safe" target="_blank">!
-                         .  qq!<img class="user_image" src="$image_url" width="48" height="48" alt="Image of $author_name_safe">!
+        $formatted_tweet .= qq!<div class="user_image">!;
+        $formatted_tweet .= qq!<a href="http://twitter.com/$author_safe/" title="Twitter homepage for $author_name_safe" target="_blank">!
+                         .  qq!<img src="$image_url" width="48" height="48" alt="Image of $author_name_safe">!
                          .  qq!</a>!;
+        # Format retweeted user image
+        if ( $tweet_obj->is_retweet ) {
+            my $author = $tweet->{'retweeted_status'}->{'user'}->{'screen_name'};
+            my $author_safe = HTML::Entities::encode($author);
+            my $author_name = $tweet->{'retweeted_status'}->{'user'}->{'name'};
+            my $author_name_safe = HTML::Entities::encode($author_name);
+            my $image_url = HTML::Entities::encode(
+                $tweet->{'retweeted_status'}->{'user'}->{'profile_image_url'}
+            );
+            $formatted_tweet .= qq!<a href="http://twitter.com/$author_safe/" title="Twitter homepage for $author_name_safe" target="_blank">!
+                             .  qq!<img src="$image_url" width="48" height="48" alt="Image of $author_name_safe">!
+                             .  qq!</a>!;
+        }
+        $formatted_tweet .=  qq!</div>!;
     }
 
     # Format date
