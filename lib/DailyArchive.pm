@@ -4,7 +4,7 @@ use warnings;
 package DailyArchive;
 use Moose;
 
-use DBI ();
+use DailyArchive::Database;
 use File::HomeDir ();
 use Path::Class::Dir ();
 use Config::Any ();
@@ -16,14 +16,6 @@ sub BUILD {
     die "Please specify 'consumer_secret' in the [twitter] section of '" . $self->config_file . "'\n" unless $self->twitter_consumer_secret;
     die "Please specify 'access_token' in the [twitter] section of '"   . $self->config_file . "'\n" unless $self->twitter_access_token;
     die "Please specify 'access_token_secret' in the [twitter] section of '"    . $self->config_file . "'\n" unless $self->twitter_access_token_secret;
-}
-
-sub DEMOLISH {
-    my ($self) = @_;
-    if ( $self->has_dbh ) {
-        warn("Disconnecting from database...\n") if $self->debug;
-        $self->dbh->disconnect();
-    }
 }
 
 has 'debug' => (
@@ -110,46 +102,16 @@ sub _build_twitter {
     );
 }
 
-has 'database_dsn' => (
-    is      => 'ro',
-    isa     => 'Str',
-    lazy    => 1,
-    default => sub { return (shift)->config->{'database'}->{'dsn'} || 'dbi:Pg:dbname=twitter_daily_archive'; },
-);
-
-has 'database_username' => (
-    is      => 'ro',
-    isa     => 'Str',
-    lazy    => 1,
-    default => sub { return (shift)->config->{'database'}->{'username'} || ''; },
-);
-
-has 'database_password' => (
-    is      => 'ro',
-    isa     => 'Str',
-    lazy    => 1,
-    default => sub { return (shift)->config->{'database'}->{'password'} || ''; },
-);
-
-has 'dbh' => (
-    is => 'ro',
-    isa => 'DBI::db',
+has 'database' => (
+    is         => 'ro',
+    isa        => 'DailyArchive::Database',
     lazy_build => 1,
+    handles    => [ 'dbh' ],
 );
 
-sub _build_dbh {
+sub _build_database {
     my ($self) = @_;
-    my $dbh = DBI->connect(
-        $self->database_dsn,
-        $self->database_username,
-        $self->database_password,
-    );
-    confess("Can't connect to database!") unless $dbh;
-    # Return data from DB already decoded as native perl string
-    $dbh->{'pg_enable_utf8'} = 1;
-    $dbh->{'RaiseError'} = 1;
-    $dbh->{'PrintError'} = 0;
-    return $dbh;
+    return DailyArchive::Database->new( da => $self );
 }
 
 no Moose;
